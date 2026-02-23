@@ -39,7 +39,7 @@ def valid_landmark(draw):
 
 
 @st.composite
-def valid_landmark_list(draw, min_size=1, max_size=33):
+def valid_landmark_list(draw, min_size=1, max_size=22):
     """Generate a list of valid landmarks."""
     return draw(st.lists(valid_landmark(), min_size=min_size, max_size=max_size))
 
@@ -50,10 +50,9 @@ def valid_tracking_data(draw):
     return TrackingData(
         timestamp=draw(st.floats(min_value=0.0, max_value=1000.0, allow_nan=False, allow_infinity=False)),
         frame_number=draw(st.integers(min_value=0, max_value=10000)),
-        pose_landmarks=draw(st.one_of(st.none(), valid_landmark_list(min_size=1, max_size=33))),
+        pose_landmarks=draw(st.one_of(st.none(), valid_landmark_list(min_size=1, max_size=22))),
         left_hand_landmarks=draw(st.one_of(st.none(), valid_landmark_list(min_size=1, max_size=21))),
-        right_hand_landmarks=draw(st.one_of(st.none(), valid_landmark_list(min_size=1, max_size=21))),
-        face_landmarks=draw(st.one_of(st.none(), valid_landmark_list(min_size=1, max_size=468)))
+        right_hand_landmarks=draw(st.one_of(st.none(), valid_landmark_list(min_size=1, max_size=21)))
     )
 
 
@@ -141,19 +140,9 @@ class TestLandmarkDataValidity:
                     f"Right hand landmark y={landmark.y} out of range"
                 assert 0.0 <= landmark.visibility <= 1.0, \
                     f"Right hand landmark visibility={landmark.visibility} out of range"
-        
-        # Check face landmarks
-        if tracking_data.face_landmarks:
-            for landmark in tracking_data.face_landmarks:
-                assert 0.0 <= landmark.x <= 1.0, \
-                    f"Face landmark x={landmark.x} out of range"
-                assert 0.0 <= landmark.y <= 1.0, \
-                    f"Face landmark y={landmark.y} out of range"
-                assert 0.0 <= landmark.visibility <= 1.0, \
-                    f"Face landmark visibility={landmark.visibility} out of range"
     
     @settings(max_examples=100)
-    @given(landmark_list=valid_landmark_list(min_size=5, max_size=33))
+    @given(landmark_list=valid_landmark_list(min_size=5, max_size=22))
     def test_multiple_landmarks_all_valid(self, landmark_list):
         """
         Test that collections of landmarks all maintain validity.

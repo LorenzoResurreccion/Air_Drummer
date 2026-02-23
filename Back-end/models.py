@@ -81,14 +81,12 @@ class TrackingData:
         pose_landmarks: List of pose landmarks (33 points) or None if not detected
         left_hand_landmarks: List of left hand landmarks (21 points) or None if not detected
         right_hand_landmarks: List of right hand landmarks (21 points) or None if not detected
-        face_landmarks: List of face landmarks or None if not detected
     """
     timestamp: float
     frame_number: int
     pose_landmarks: Optional[List[LandmarkData]]
     left_hand_landmarks: Optional[List[LandmarkData]]
     right_hand_landmarks: Optional[List[LandmarkData]]
-    face_landmarks: Optional[List[LandmarkData]]
     
     def has_body_detected(self) -> bool:
         """
@@ -101,7 +99,6 @@ class TrackingData:
             self.pose_landmarks is not None,
             self.left_hand_landmarks is not None,
             self.right_hand_landmarks is not None,
-            self.face_landmarks is not None
         ])
     
     def get_reliable_landmarks(self, threshold: float = 0.5) -> dict:
@@ -118,7 +115,6 @@ class TrackingData:
             'pose': [],
             'left_hand': [],
             'right_hand': [],
-            'face': []
         }
         
         if self.pose_landmarks:
@@ -129,9 +125,6 @@ class TrackingData:
         
         if self.right_hand_landmarks:
             result['right_hand'] = [lm for lm in self.right_hand_landmarks if lm.is_reliable(threshold)]
-        
-        if self.face_landmarks:
-            result['face'] = [lm for lm in self.face_landmarks if lm.is_reliable(threshold)]
         
         return result
     
@@ -148,6 +141,5 @@ class TrackingData:
             'pose_landmarks': [lm.to_dict() for lm in self.pose_landmarks] if self.pose_landmarks else None,
             'left_hand_landmarks': [lm.to_dict() for lm in self.left_hand_landmarks] if self.left_hand_landmarks else None,
             'right_hand_landmarks': [lm.to_dict() for lm in self.right_hand_landmarks] if self.right_hand_landmarks else None,
-            'face_landmarks': [lm.to_dict() for lm in self.face_landmarks] if self.face_landmarks else None,
             'has_body_detected': self.has_body_detected()
         }

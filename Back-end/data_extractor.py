@@ -66,7 +66,6 @@ class TrackingDataExtractor:
         pose_landmarks = self._extract_pose_landmarks(results)
         left_hand_landmarks = self._extract_hand_landmarks(results, hand_type="left")
         right_hand_landmarks = self._extract_hand_landmarks(results, hand_type="right")
-        face_landmarks = self._extract_face_landmarks(results)
         
         return TrackingData(
             timestamp=timestamp,
@@ -74,24 +73,27 @@ class TrackingDataExtractor:
             pose_landmarks=pose_landmarks,
             left_hand_landmarks=left_hand_landmarks,
             right_hand_landmarks=right_hand_landmarks,
-            face_landmarks=face_landmarks
         )
     
     def _extract_pose_landmarks(self, results) -> Optional[List[LandmarkData]]:
         """
-        Extract pose landmarks from MediaPipe results.
+        Extract pose landmarks from MediaPipe results (excluding facial landmarks).
         
         Args:
             results: MediaPipe Holistic detection results
             
         Returns:
-            List of LandmarkData objects for pose, or None if not detected
+            List of LandmarkData objects for pose (body only, no face), or None if not detected
         """
         if not results.pose_landmarks:
             return None
         
         landmarks = []
+        # Skip facial landmarks (indices 0-10), only extract body landmarks (11-32)
         for idx, landmark in enumerate(results.pose_landmarks.landmark):
+            if idx < 11:  # Skip facial landmarks
+                continue
+                
             landmark_name = self.POSE_LANDMARK_NAMES[idx] if idx < len(self.POSE_LANDMARK_NAMES) else f"POSE_{idx}"
             
             landmarks.append(LandmarkData(
@@ -147,30 +149,6 @@ class TrackingDataExtractor:
         
         return landmarks
     
-    def _extract_face_landmarks(self, results) -> Optional[List[LandmarkData]]:
-        """
-        Extract face landmarks from MediaPipe results.
-        
-        Args:
-            results: MediaPipe Holistic detection results
-            
-        Returns:
-            List of LandmarkData objects for face, or None if not detected
-        """
-        if not results.face_landmarks:
-            return None
-        
-        landmarks = []
-        for idx, landmark in enumerate(results.face_landmarks.landmark):
-            landmarks.append(LandmarkData(
-                x=landmark.x,
-                y=landmark.y,
-                z=landmark.z,
-                visibility=getattr(landmark, 'visibility', 1.0),
-                landmark_type=f"FACE_{idx}"
-            ))
-        
-        return landmarks
     
     def get_landmark_position(self, landmark) -> dict:
         """

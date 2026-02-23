@@ -2,7 +2,7 @@
 VisualRenderer component for drawing body landmarks and connections on video frames.
 
 This module provides visualization of MediaPipe Holistic detection results by drawing
-landmarks and connections for pose, hands, and face on video frames using MediaPipe's
+landmarks and connections for pose and hands on video frames using MediaPipe's
 drawing utilities.
 """
 
@@ -77,7 +77,7 @@ class VisualRenderer:
     
     def draw_pose(self, frame: np.ndarray, pose_landmarks) -> np.ndarray:
         """
-        Draw pose landmarks and connections on the frame.
+        Draw pose landmarks and connections on the frame (excluding facial landmarks).
         
         Args:
             frame: BGR image as numpy array
@@ -88,10 +88,18 @@ class VisualRenderer:
         """
         if pose_landmarks is not None:
             try:
+                # Create a custom connection set that excludes facial landmarks
+                # MediaPipe pose landmarks 0-10 are facial landmarks
+                # We only want to draw body landmarks (11-32)
+                pose_connections = [
+                    connection for connection in self.mp_holistic.POSE_CONNECTIONS
+                    if connection[0] >= 11 and connection[1] >= 11
+                ]
+                
                 self.mp_drawing.draw_landmarks(
                     frame,
                     pose_landmarks,
-                    self.mp_holistic.POSE_CONNECTIONS,
+                    pose_connections,
                     landmark_drawing_spec=self.pose_landmark_style,
                     connection_drawing_spec=self.pose_connection_style
                 )
