@@ -26,7 +26,7 @@ class BodyTracker:
                  camera_index: int = 0,
                  min_detection_confidence: float = 0.5,
                  min_tracking_confidence: float = 0.5,
-                 model_complexity: int = 1,
+                 model_complexity: int = 0,
                  flip_frame: bool = True,
                  frame_width: Optional[int] = None,
                  frame_height: Optional[int] = None,
@@ -290,7 +290,7 @@ def parse_arguments():
                        help='Minimum confidence for tracking (0.0-1.0)')
     
     # Model configuration
-    parser.add_argument('--model-complexity', type=int, default=1, choices=[0, 1, 2],
+    parser.add_argument('--model-complexity', type=int, default=0, choices=[0, 1, 2],
                        help='MediaPipe model complexity (0=lite, 1=full, 2=heavy)')
     
     # Frame configuration
