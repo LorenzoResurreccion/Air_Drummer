@@ -6,14 +6,9 @@ Tests command-line argument parsing, FPS counter, and configuration options.
 
 import pytest
 import numpy as np
-import sys
-import os
 
-# Add Back-end directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from video_capture import VideoCaptureManager
-from holistic_detector import HolisticDetector
+from comp_vision.video_capture import VideoCaptureManager
+from comp_vision.holistic_detector import HolisticDetector
 
 
 class TestVideoCaptureConfiguration:

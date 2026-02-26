@@ -8,7 +8,7 @@ TrackingData objects with proper handling of missing landmarks.
 
 from typing import Optional, List
 import time
-from models import TrackingData, LandmarkData
+from comp_vision.models import TrackingData, LandmarkData
 
 
 class TrackingDataExtractor:
@@ -91,8 +91,8 @@ class TrackingDataExtractor:
         landmarks = []
         # Skip facial landmarks (indices 0-10), only extract body landmarks (11-32)
         for idx, landmark in enumerate(results.pose_landmarks.landmark):
-            if idx < 11:  # Skip facial landmarks
-                continue
+            #if idx < 11:  # Skip facial landmarks
+                #continue
                 
             landmark_name = self.POSE_LANDMARK_NAMES[idx] if idx < len(self.POSE_LANDMARK_NAMES) else f"POSE_{idx}"
             

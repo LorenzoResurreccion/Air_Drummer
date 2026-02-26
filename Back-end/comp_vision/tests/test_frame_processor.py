@@ -12,13 +12,8 @@ Requirements: 1.3
 
 import pytest
 import numpy as np
-import sys
-from pathlib import Path
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from frame_processor import FramePreprocessor
+from comp_vision.frame_processor import FramePreprocessor
 
 
 class TestFramePreprocessorBGRtoRGB:

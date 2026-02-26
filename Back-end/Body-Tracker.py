@@ -5,14 +5,20 @@ import logging
 import argparse
 from typing import Optional, Tuple
 import numpy as np
+import socketio
+import threading
 
 # Import all components
-from video_capture import VideoCaptureManager, CameraAccessError
-from frame_processor import FramePreprocessor
-from holistic_detector import HolisticDetector
-from data_extractor import TrackingDataExtractor
-from visual_renderer import VisualRenderer
-from models import TrackingData
+from comp_vision.video_capture import VideoCaptureManager, CameraAccessError
+from comp_vision.frame_processor import FramePreprocessor
+from comp_vision.holistic_detector import HolisticDetector
+from comp_vision.data_extractor import TrackingDataExtractor
+from comp_vision.visual_renderer import VisualRenderer
+from comp_vision.models import TrackingData
+
+# Import tap detection components
+from tap_detection.tap_detection_manager import TapDetectionManager
+from tap_detection.tap_models import TapDetectionConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -30,7 +36,12 @@ class BodyTracker:
                  flip_frame: bool = True,
                  frame_width: Optional[int] = None,
                  frame_height: Optional[int] = None,
-                 show_fps: bool = False):
+                 show_fps: bool = False,
+                 enable_tap_detection: bool = True,
+                 tap_min_displacement: float = 0.05,
+                 tap_min_velocity: float = 0.25,
+                 tap_debounce_ms: int = 150,
+                 websocket_port: int = 5001):
         """
         Initialize body tracking system.
         
@@ -43,6 +54,11 @@ class BodyTracker:
             frame_width: Optional frame width for capture resolution
             frame_height: Optional frame height for capture resolution
             show_fps: Whether to display FPS counter on screen
+            enable_tap_detection: Whether to enable tap detection (default True)
+            tap_min_displacement: Minimum displacement for tap detection (default 0.05)
+            tap_min_velocity: Minimum velocity for tap detection (default 0.25)
+            tap_debounce_ms: Debounce window in milliseconds (default 150)
+            websocket_port: Port for WebSocket server (default 5001)
         """
         self.camera_index = camera_index
         self.flip_frame = flip_frame
@@ -50,6 +66,13 @@ class BodyTracker:
         self.detection_failures = 0
         self.frame_failures = 0
         self.show_fps = show_fps
+        self.enable_tap_detection = enable_tap_detection
+        self.websocket_port = websocket_port
+        
+        # WebSocket server components
+        self.sio = None
+        self.wsgi_app = None
+        self.websocket_thread = None
         
         # FPS tracking
         self.fps_start_time = time.time()
@@ -75,6 +98,24 @@ class BodyTracker:
             )
             self.data_extractor = TrackingDataExtractor()
             self.renderer = VisualRenderer()
+            
+            # Initialize WebSocket server if tap detection is enabled
+            if enable_tap_detection:
+                self._initialize_websocket_server()
+            
+            # Initialize tap detection if enabled
+            self.tap_detection_manager = None
+            if enable_tap_detection:
+                tap_config = TapDetectionConfig(
+                    min_displacement=tap_min_displacement,
+                    min_velocity=tap_min_velocity
+                )
+                self.tap_detection_manager = TapDetectionManager(
+                    config=tap_config,
+                    debounce_ms=tap_debounce_ms,
+                    sio=self.sio  # Pass Socket.IO server to manager
+                )
+                logger.info("Tap detection enabled")
             
             # Verify camera is opened
             if not self.capture_manager.is_opened():
@@ -133,6 +174,10 @@ class BodyTracker:
             # Extract tracking data (handles None results gracefully)
             timestamp = time.time()
             tracking_data = self.data_extractor.extract(results, timestamp)
+            
+            # Process tap detection if enabled
+            if self.enable_tap_detection and self.tap_detection_manager and tracking_data:
+                self.tap_detection_manager.process_tracking_data(tracking_data)
             
             # Render visual feedback (handles None results gracefully)
             annotated_frame = self.renderer.render(rgb_frame, results)
@@ -210,6 +255,81 @@ class BodyTracker:
             self.fps_frame_count = 0
             self.fps_start_time = time.time()
     
+    def _initialize_websocket_server(self):
+        """
+        Initialize WebSocket server in a separate thread.
+        
+        Creates a Socket.IO server and starts it in a background thread
+        to handle real-time communication with the frontend audio player.
+        """
+        try:
+            # Create Socket.IO server
+            self.sio = socketio.Server(
+                cors_allowed_origins='*',
+                async_mode='threading',
+                logger=False,  # Disable Socket.IO logging to reduce noise
+                engineio_logger=False
+            )
+            
+            # Create WSGI application
+            self.wsgi_app = socketio.WSGIApp(self.sio)
+            
+            # Define connection event handlers
+            @self.sio.event
+            def connect(sid, environ):
+                logger.info(f"WebSocket client connected: {sid}")
+            
+            @self.sio.event
+            def disconnect(sid):
+                logger.info(f"WebSocket client disconnected: {sid}")
+            
+            # Start WebSocket server in separate thread
+            def run_websocket_server():
+                """Run WebSocket server in background thread."""
+                try:
+                    import eventlet
+                    import eventlet.wsgi
+                    # Create listening socket
+                    listener = eventlet.listen(('0.0.0.0', self.websocket_port))
+                    # Start WSGI server
+                    eventlet.wsgi.server(
+                        listener,
+                        self.wsgi_app,
+                        log_output=False  # Suppress WSGI logs
+                    )
+                except (ImportError, AttributeError) as e:
+                    # Fallback to werkzeug if eventlet not available or has issues
+                    logger.warning(f"eventlet not available or incompatible ({e}), using werkzeug (may have higher latency)")
+                    try:
+                        from werkzeug.serving import run_simple
+                        run_simple(
+                            '0.0.0.0',
+                            self.websocket_port,
+                            self.wsgi_app,
+                            use_reloader=False,
+                            use_debugger=False,
+                            threaded=True
+                        )
+                    except ImportError:
+                        logger.error("Neither eventlet nor werkzeug available for WebSocket server")
+                        raise
+            
+            self.websocket_thread = threading.Thread(
+                target=run_websocket_server,
+                daemon=True,  # Daemon thread will exit when main thread exits
+                name="WebSocketServer"
+            )
+            self.websocket_thread.start()
+            
+            logger.info(f"WebSocket server started on port {self.websocket_port}")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize WebSocket server: {e}")
+            # Don't raise - allow tracking to continue without WebSocket
+            self.sio = None
+            self.wsgi_app = None
+            self.websocket_thread = None
+    
     def _add_fps_counter(self, frame: np.ndarray) -> np.ndarray:
         """
         Add FPS counter overlay to frame.
@@ -238,6 +358,27 @@ class BodyTracker:
         
         This is a best-effort cleanup that logs errors but doesn't raise exceptions.
         """
+        # Shutdown WebSocket server
+        try:
+            if hasattr(self, 'sio') and self.sio:
+                logger.info("Shutting down WebSocket server...")
+                # Socket.IO server cleanup is handled by daemon thread
+                self.sio = None
+                self.wsgi_app = None
+        except Exception as e:
+            logger.error(f"Error shutting down WebSocket server: {e}")
+        
+        # Wait for WebSocket thread to finish (with timeout)
+        try:
+            if hasattr(self, 'websocket_thread') and self.websocket_thread:
+                if self.websocket_thread.is_alive():
+                    # Give thread a short time to finish (it's a daemon so will be killed anyway)
+                    self.websocket_thread.join(timeout=1.0)
+                    if self.websocket_thread.is_alive():
+                        logger.warning("WebSocket thread did not terminate in time (will be killed on exit)")
+        except Exception as e:
+            logger.error(f"Error waiting for WebSocket thread: {e}")
+        
         # Release camera
         try:
             if hasattr(self, 'capture_manager') and self.capture_manager:
@@ -310,6 +451,20 @@ def parse_arguments():
                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                        help='Logging level')
     
+    # Tap detection configuration
+    parser.add_argument('--disable-tap-detection', action='store_true',
+                       help='Disable tap detection for bass drum')
+    parser.add_argument('--tap-min-displacement', type=float, default=0.05,
+                       help='Minimum displacement for tap detection (0.01-0.15)')
+    parser.add_argument('--tap-min-velocity', type=float, default=0.25,
+                       help='Minimum velocity for tap detection (0.1-1.0)')
+    parser.add_argument('--tap-debounce', type=int, default=150,
+                       help='Debounce window in milliseconds (50-500)')
+    
+    # WebSocket configuration
+    parser.add_argument('--websocket-port', type=int, default=5001,
+                       help='Port for WebSocket server (default 5001)')
+    
     return parser.parse_args()
 
 
@@ -326,7 +481,8 @@ def main():
         logger.info(f"Configuration: camera={args.camera}, "
                    f"detection_conf={args.min_detection_confidence}, "
                    f"tracking_conf={args.min_tracking_confidence}, "
-                   f"model_complexity={args.model_complexity}")
+                   f"model_complexity={args.model_complexity}, "
+                   f"tap_detection={'disabled' if args.disable_tap_detection else 'enabled'}")
         
         # Initialize and start body tracker with parsed arguments
         tracker = BodyTracker(
@@ -337,7 +493,12 @@ def main():
             flip_frame=not args.no_flip,
             frame_width=args.width,
             frame_height=args.height,
-            show_fps=args.show_fps
+            show_fps=args.show_fps,
+            enable_tap_detection=not args.disable_tap_detection,
+            tap_min_displacement=args.tap_min_displacement,
+            tap_min_velocity=args.tap_min_velocity,
+            tap_debounce_ms=args.tap_debounce,
+            websocket_port=args.websocket_port
         )
         tracker.start()
     

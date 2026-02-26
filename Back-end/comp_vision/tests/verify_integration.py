@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 # Import Body-Tracker.py module
-body_tracker_path = Path(__file__).parent / "Body-Tracker.py"
+body_tracker_path = Path(__file__).parent.parent.parent / "Body-Tracker.py"
 spec = importlib.util.spec_from_file_location("body_tracker", body_tracker_path)
 body_tracker = importlib.util.module_from_spec(spec)
 sys.modules["body_tracker"] = body_tracker

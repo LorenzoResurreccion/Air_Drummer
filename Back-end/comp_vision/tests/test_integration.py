@@ -6,18 +6,12 @@ Tests the end-to-end integration of all components.
 
 import pytest
 import numpy as np
-import sys
-import os
-
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import importlib.util
 import sys
 from pathlib import Path
 
 # Import Body-Tracker.py module (with hyphen in name)
-body_tracker_path = Path(__file__).parent.parent / "Body-Tracker.py"
+body_tracker_path = Path(__file__).parent.parent.parent / "Body-Tracker.py"
 spec = importlib.util.spec_from_file_location("body_tracker", body_tracker_path)
 body_tracker = importlib.util.module_from_spec(spec)
 sys.modules["body_tracker"] = body_tracker
@@ -25,7 +19,7 @@ spec.loader.exec_module(body_tracker)
 
 BodyTracker = body_tracker.BodyTracker
 parse_arguments = body_tracker.parse_arguments
-from models import TrackingData
+from comp_vision.models import TrackingData
 
 
 class TestBodyTrackerIntegration:

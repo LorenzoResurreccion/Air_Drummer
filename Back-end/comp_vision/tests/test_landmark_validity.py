@@ -11,14 +11,9 @@ all confidence scores are in [0.0, 1.0] range.
 """
 
 import pytest
-import sys
-from pathlib import Path
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from hypothesis import given, strategies as st, settings
-from models import LandmarkData, TrackingData
+from comp_vision.models import LandmarkData, TrackingData
 
 
 # Strategy for generating valid landmark data
